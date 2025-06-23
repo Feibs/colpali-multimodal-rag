@@ -25,28 +25,36 @@ class Pipeline:
         VLM_API_ENDPOINT: str
         VLM_API_KEY: str
         VLM_MODEL_ID: str
+        CUSTOM_LLM_API_ENDPOINT: str
+        CUSTOM_LLM_API_KEY: str
+        CUSTOM_LLM_MODEL_ID: str
         QDRANT_URL: str
         QDRANT_API_KEY: str
         COLLECTION_NAME: str
         VLM_SYS_PROMPT: str
+        CUSTOM_LLM_SYS_PROMPT: str
         TOP_K: int
         GAP_BASED_THRESHOLD: float
         ADAPTIVE_THRESHOLD: float
 
     def __init__(self):
-        self.name = "ColNomic + GPT + Rerank + Threshold Filtering Pipeline"
+        self.name = "Custom Model + ColNomic + GPT + Rerank + Threshold Filtering Pipeline"
         self.valves = self.Valves(
             COLPALI_API_ENDPOINT=os.getenv("COLPALI_API_ENDPOINT", "http://my-nomic-embedding-service"),
             VLM_API_ENDPOINT=os.getenv("VLM_API_ENDPOINT", "http://10.16.0.4:4000/v1"),
             VLM_API_KEY=os.getenv("VLM_API_KEY", ""),
             VLM_MODEL_ID=os.getenv("VLM_MODEL_ID", "gpt-4o"),
+            CUSTOM_LLM_API_ENDPOINT=os.getenv("CUSTOM_LLM_API_ENDPOINT", "http://10.16.0.4:3001/api"),
+            CUSTOM_LLM_API_KEY=os.getenv("CUSTOM_LLM_API_KEY", ""),
+            CUSTOM_LLM_MODEL_ID=os.getenv("CUSTOM_LLM_MODEL_ID", "hr-model"),
             QDRANT_URL=os.getenv("QDRANT_URL", "http://my-qdrant-url"),
             QDRANT_API_KEY=os.getenv("QDRANT_API_KEY", ""),
             COLLECTION_NAME=os.getenv("QDRANT_COLLECTION", "my_collection"),
             VLM_SYS_PROMPT=os.getenv("VLM_SYS_PROMPT", "Anda adalah seorang analis dokumen ahli dengan pengalaman luas dalam analisis lintas dokumen dan sintesis informasi. Tugas Anda adalah:  1. FASE ANALISIS: - Analisis setiap gambar dokumen yang diberikan secara individual - Identifikasi informasi kunci, termasuk tanggal, angka, topik utama, dan detail penting - Catat setiap hubungan atau kontradiksi antar dokumen  2. FASE RINGKASAN: - Berikan ringkasan singkat untuk setiap dokumen - Buat ringkasan terpadu yang menyoroti tema umum dan temuan kunci - Tunjukkan kualitas/kejelasan gambar dan setiap keterbatasan dalam membacanya  3. FASE JAWABAN PERTANYAAN: - Jawab pertanyaan spesifik menggunakan bukti dari dokumen - Kutip referensi spesifik menggunakan pengidentifikasi dokumen (misalnya, 'Dokumen A menyatakan...') - Soroti di mana beberapa dokumen mendukung suatu temuan - Tunjukkan dengan jelas jika ada informasi yang diperlukan yang hilang atau tidak jelas  Format jawaban Anda dengan: - Judul bagian yang jelas - Poin-poin untuk informasi kunci - Kutipan langsung ketika sangat relevan - Referensi silang antar dokumen  Jika Anda menemui keterbatasan dalam kualitas gambar atau kejelasan konten, harap nyatakan keterbatasan tersebut secara eksplisit dalam analisis Anda. Kembalikan respons dalam bahasa Indonesia."),
+            CUSTOM_LLM_SYS_PROMPT=os.getenv("CUSTOM_LLM_SYS_PROMPT", "You are a specialized assistant. If the question is out of your knowledge base, only reply exactly with `-`. You must only answer based on your knowledge base."),
             TOP_K=int(os.getenv("TOP_K", "3")),
             GAP_BASED_THRESHOLD=os.getenv("GAP_BASED_THRESHOLD", "0.1"),
-            ADAPTIVE_THRESHOLD=os.getenv("ADAPTIVE_THRESHOLD", "1.0")
+            ADAPTIVE_THRESHOLD=os.getenv("ADAPTIVE_THRESHOLD", "0.6")
         )
         
         self.client = None
@@ -323,8 +331,6 @@ class Pipeline:
         # Add the text query with context about multiple documents
         query_text = f"Question: {query} \n\nYou are given a list of pages from a PDF document:{page_numbers} \n\nEach page includes metadata such as its page number and an image of the page. The list is initially ordered by a similarity score, but I want you to independently evaluate the content of the pages (e.g., based on their text, layout, or visual cues) and re-rank them based on their relevance or importance. If a page is irrelevant or unhelpful, feel free to exclude it from the result. \n\nReturn your output as a dictionary in this format: {{<page_number>: <final rank>}} \n\nOnly return this dictionary. Do not include any explanation or extra text."
 
-        # query_text = f"Question: {query}\n\nNote: You have been provided with {len(images)} document page(s) that are relevant to this question. Please analyze all of them and provide a comprehensive answer."
-
         messages[1]["content"].append({
             "type": "text",
             "text": query_text
@@ -364,6 +370,56 @@ class Pipeline:
             print(f"✗ Exception when calling VLM API: {str(e)}")
             return f"Error: {str(e)}"
 
+    def query_custom_llm_api(self, query: str) -> str:
+        """Queries custom LLM API with default knowledge, e.g. video knowledge using OpenAI-compatible endpoint"""
+        system_prompt = self.valves.CUSTOM_LLM_SYS_PROMPT
+        
+        # Prepare the message content with images and query
+        messages = [
+            {
+                "role": "system",
+                "content": system_prompt
+            },
+            {
+                "role": "user",
+                "content": query
+            }
+        ]
+        
+        # Prepare the API request
+        payload = {
+            "model": self.valves.CUSTOM_LLM_MODEL_ID,
+            "messages": messages,
+            "max_tokens": 1500,  # Increased for multiple documents
+            "temperature": 0.01,
+            "top_p": 0.001,
+        }
+
+        headers = {
+            "Authorization": f"Bearer {self.valves.CUSTOM_LLM_API_KEY}",
+            "Content-Type": "application/json",
+        }
+        
+        # Make the API request
+        try:
+            response = requests.post(
+                f"{self.valves.CUSTOM_LLM_API_ENDPOINT}/chat/completions", 
+                headers=headers,
+                json=payload,
+                timeout=180  # Increased timeout for multiple images
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                return result["choices"][0]["message"]["content"]
+            else:
+                print(f"✗ Error from custom LLM API: {response.status_code} - {response.text}")
+                return f"Error: Failed to get response from custom LLM API. {response.text}. Status code: {response.status_code}"
+        except Exception as e:
+            print(f"✗ Exception when calling custom LLM API: {str(e)}")
+            return f"Error: {str(e)}"
+
+
     def pipe(
         self, user_message: str, model_id: str, messages: List[dict], body: dict
     ) -> Union[str, Generator, Iterator]:
@@ -379,6 +435,12 @@ class Pipeline:
             # Process the query
             query = user_message
             print(f"🔍 Processing query: '{query}'")
+
+            # By default answer with knowledge from the custom LLM
+            response = self.query_custom_llm_api(query)
+            if response != '-':           
+                return response
+            
             print(f"📊 Retrieving TOP_K={self.valves.TOP_K} relevant documents")
             
             # Retrieve relevant documents using ColPali
@@ -405,7 +467,7 @@ class Pipeline:
 
                 # Format the response with detailed document information
                 doc_info = f"\n\n📋 **Source Information ({len(reranked_docs)} documents analyzed):**\n"
-                
+
                 # Get the answer from the VLM API with all images (original results)
                 print(f"🤖 Generating re-ranked answer using VLM with {len(images)} images...")
 
