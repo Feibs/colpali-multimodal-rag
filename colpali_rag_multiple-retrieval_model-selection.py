@@ -70,7 +70,7 @@ class Pipeline:
     def get_qdrant_client(self):
         """Get a connection to the Qdrant vector database"""
         if not self.client:
-            self.client = QdrantClient(url=self.valves.QDRANT_URL, api_key=self.valves.QDRANT_API_KEY)
+            self.client = QdrantClient(url=self.valves.QDRANT_URL, port=None)
         return self.client
 
     def initialize_data(self):
