@@ -38,7 +38,7 @@ class Pipeline:
         ADAPTIVE_THRESHOLD: float
 
     def __init__(self):
-        self.name = "Custom Model + ColNomic + GPT + Rerank + Threshold Filtering Pipeline"
+        self.name = "HR Knowledge Management"
         self.valves = self.Valves(
             COLPALI_API_ENDPOINT=os.getenv("COLPALI_API_ENDPOINT", "http://my-nomic-embedding-service"),
             VLM_API_ENDPOINT=os.getenv("VLM_API_ENDPOINT", "http://10.16.0.4:4000/v1"),
@@ -50,7 +50,7 @@ class Pipeline:
             QDRANT_URL=os.getenv("QDRANT_URL", "http://my-qdrant-url"),
             QDRANT_API_KEY=os.getenv("QDRANT_API_KEY", ""),
             COLLECTION_NAME=os.getenv("QDRANT_COLLECTION", "my_collection"),
-            VLM_SYS_PROMPT=os.getenv("VLM_SYS_PROMPT", "Anda adalah seorang analis dokumen ahli dengan pengalaman luas dalam analisis lintas dokumen dan sintesis informasi. Tugas Anda adalah:  1. FASE ANALISIS: - Analisis setiap gambar dokumen yang diberikan secara individual - Identifikasi informasi kunci, termasuk tanggal, angka, topik utama, dan detail penting - Catat setiap hubungan atau kontradiksi antar dokumen  2. FASE RINGKASAN: - Berikan ringkasan singkat untuk setiap dokumen - Buat ringkasan terpadu yang menyoroti tema umum dan kata kunci - Tunjukkan kualitas/kejelasan gambar dan setiap keterbatasan dalam membacanya  3. FASE JAWABAN PERTANYAAN: - Jawab pertanyaan spesifik dari pengguna berdasarkan bukti dari dokumen, perhatikan kata kunci antara pertanyaan pengguna dan dokumen - Kutip referensi spesifik menggunakan pengidentifikasi dokumen (misalnya, 'Dokumen A menyatakan...') - Soroti di mana beberapa dokumen menjawab pertanyaan pengguna - Tunjukkan dengan jelas jika ada informasi yang diperlukan yang hilang atau tidak jelas  Format jawaban Anda dengan: - Judul bagian yang jelas - Poin-poin untuk informasi kunci - Kutipan langsung ketika sangat relevan - Referensi silang antar dokumen  Jika Anda menemui keterbatasan dalam kualitas gambar atau kejelasan konten, harap nyatakan keterbatasan tersebut secara eksplisit dalam analisis Anda. Kembalikan respons dalam bahasa Indonesia."),
+            VLM_SYS_PROMPT=os.getenv("VLM_SYS_PROMPT", "Anda adalah seorang analis dokumen ahli dengan pengalaman luas dalam analisis lintas dokumen dan sintesis informasi. Tugas Anda adalah:  1. FASE ANALISIS: - Analisis setiap gambar dokumen yang diberikan secara individual - Identifikasi informasi kunci, termasuk tanggal, angka, topik utama, dan detail penting - Catat setiap hubungan atau kontradiksi antar dokumen  2. FASE RINGKASAN: - Berikan ringkasan singkat untuk setiap dokumen - Buat ringkasan terpadu yang menyoroti tema umum dan kata kunci - Tunjukkan kualitas/kejelasan gambar dan setiap keterbatasan dalam membacanya  3. FASE JAWABAN PERTANYAAN: - Jawab pertanyaan spesifik dari pengguna berdasarkan bukti dari dokumen, perhatikan kata kunci antara pertanyaan pengguna dan dokumen - Kutip referensi spesifik menggunakan pengidentifikasi dokumen (misalnya, 'Dokumen A menyatakan...') - Soroti di mana beberapa dokumen menjawab pertanyaan pengguna - Tunjukkan dengan jelas jika ada informasi yang diperlukan yang hilang atau tidak jelas  Format jawaban Anda dengan: - Judul bagian yang jelas - Poin-poin untuk informasi kunci - Kutipan langsung ketika sangat relevan - Referensi silang antar dokumen  Jika Anda menemui keterbatasan dalam kualitas gambar atau kejelasan konten, harap nyatakan keterbatasan tersebut secara eksplisit dalam analisis Anda."),
             CUSTOM_LLM_SYS_PROMPT=os.getenv("CUSTOM_LLM_SYS_PROMPT", "You are a specialized assistant. If the question is out of your knowledge base, only reply exactly with `-`. You must only answer based on your knowledge base."),
             TOP_K=int(os.getenv("TOP_K", "3")),
             GAP_BASED_THRESHOLD=os.getenv("GAP_BASED_THRESHOLD", "0.1"),
@@ -447,7 +447,7 @@ class Pipeline:
             results = self.retrieve(query, self.valves.TOP_K)
             
             if not results:
-                return f"❌ No relevant documents found for your query. Please ensure documents have been indexed using the ColPali batch embedding script."
+                return f"Sorry, no relevant documents found for your query. Please ensure documents have been indexed using the ColPali batch embedding script."
             
             print(f"📄 Found {len(results)} relevant document(s) before threshold filtering:")
             for result in results:
@@ -464,10 +464,10 @@ class Pipeline:
                 reranked_docs = ast.literal_eval(str(answer))
 
                 if (len(reranked_docs) == 0):
-                    return "❌ No relevant documents found for your question."
+                    return "Sorry, no relevant documents found for your question. Try adding more documents to your collection or ask another question."
 
                 new_results = [0] * len(reranked_docs)
-                doc_info = f"\n\n📋 **Source Information ({len(reranked_docs)} documents analyzed):**\n"
+                doc_info = f"\n\nSee {len(reranked_docs)} page(s) below for this matter.\n"
                 print(f"🤖 Generating re-ranked answer using VLM with {len(images)} images...")
 
                 for result in results:
@@ -478,7 +478,7 @@ class Pipeline:
                 results = new_results
 
             except Exception as e:
-                error_message = f"❌ Sorry, try another question"
+                error_message = f"Sorry, let's try another question."
                 answer = self.query_vlm_api(query, images, results)
                 print(f"❌ Error query vlm api: {str(e)} \n\nanswer: {repr(answer)} | is dict? {str(isinstance(answer, dict))} | is str? {str(isinstance(answer, str))}")
                 return error_message
@@ -492,19 +492,17 @@ class Pipeline:
                 yield "\n\n"
                 
                 # Add all document images for reference
-                yield f"📸 **Retrieved Document Pages:**\n\n"
+                yield f"📋 **Retrieved document page:**\n\n"
                 for result in results:
                     b64_img = self.encode_image_webp_to_base64(result["image"])
                     yield f"**{result['rank']}. {result['title']} - Page {result['page_number']}**\n"
                     yield f"![Document Page {result['rank']}](data:image/webp;base64,{b64_img})\n\n"
-                
-                yield "\n---\n*Powered by ColPali Multi-Vector RAG with Multiple Document Retrieval and Threshold Filtering*\n"
-            
+
             return generate_response()
                 
         except Exception as e:
-            error_message = f"❌ Error processing query: {str(e)}"
-            print(error_message)
+            print(f"❌ Error processing query: {str(e)}")
+            error_message = "Sorry, an error occurred. Try again in a moment."
             return error_message
 
 # For standalone testing
