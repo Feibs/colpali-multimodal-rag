@@ -29,7 +29,6 @@ class Pipeline:
         CUSTOM_LLM_API_KEY: str
         CUSTOM_LLM_MODEL_ID: str
         QDRANT_URL: str
-        QDRANT_API_KEY: str
         COLLECTION_NAME: str
         VLM_SYS_PROMPT: str
         CUSTOM_LLM_SYS_PROMPT: str
@@ -38,7 +37,7 @@ class Pipeline:
         ADAPTIVE_THRESHOLD: float
 
     def __init__(self):
-        self.name = "HR Knowledge Management"
+        self.name = "People and Policy Hub"
         self.valves = self.Valves(
             COLPALI_API_ENDPOINT=os.getenv("COLPALI_API_ENDPOINT", "http://my-nomic-embedding-service"),
             VLM_API_ENDPOINT=os.getenv("VLM_API_ENDPOINT", "http://10.16.0.4:4000/v1"),
@@ -48,7 +47,6 @@ class Pipeline:
             CUSTOM_LLM_API_KEY=os.getenv("CUSTOM_LLM_API_KEY", ""),
             CUSTOM_LLM_MODEL_ID=os.getenv("CUSTOM_LLM_MODEL_ID", "hr-model"),
             QDRANT_URL=os.getenv("QDRANT_URL", "http://my-qdrant-url"),
-            QDRANT_API_KEY=os.getenv("QDRANT_API_KEY", ""),
             COLLECTION_NAME=os.getenv("QDRANT_COLLECTION", "my_collection"),
             VLM_SYS_PROMPT=os.getenv("VLM_SYS_PROMPT", "Anda adalah seorang analis dokumen ahli dengan pengalaman luas dalam analisis lintas dokumen dan sintesis informasi. Tugas Anda adalah:  1. FASE ANALISIS: - Analisis setiap gambar dokumen yang diberikan secara individual - Identifikasi informasi kunci, termasuk tanggal, angka, topik utama, dan detail penting - Catat setiap hubungan atau kontradiksi antar dokumen  2. FASE RINGKASAN: - Berikan ringkasan singkat untuk setiap dokumen - Buat ringkasan terpadu yang menyoroti tema umum dan kata kunci - Tunjukkan kualitas/kejelasan gambar dan setiap keterbatasan dalam membacanya  3. FASE JAWABAN PERTANYAAN: - Jawab pertanyaan spesifik dari pengguna berdasarkan bukti dari dokumen, perhatikan kata kunci antara pertanyaan pengguna dan dokumen - Kutip referensi spesifik menggunakan pengidentifikasi dokumen (misalnya, 'Dokumen A menyatakan...') - Soroti di mana beberapa dokumen menjawab pertanyaan pengguna - Tunjukkan dengan jelas jika ada informasi yang diperlukan yang hilang atau tidak jelas  Format jawaban Anda dengan: - Judul bagian yang jelas - Poin-poin untuk informasi kunci - Kutipan langsung ketika sangat relevan - Referensi silang antar dokumen  Jika Anda menemui keterbatasan dalam kualitas gambar atau kejelasan konten, harap nyatakan keterbatasan tersebut secara eksplisit dalam analisis Anda."),
             CUSTOM_LLM_SYS_PROMPT=os.getenv("CUSTOM_LLM_SYS_PROMPT", "You are a specialized assistant. If the question is out of your knowledge base, only reply exactly with `-`. You must only answer based on your knowledge base."),
@@ -452,12 +450,8 @@ class Pipeline:
             print(f"📄 Found {len(results)} relevant document(s) before threshold filtering:")
             for result in results:
                 print(f"  {result['rank']}. {result['title']}, Page {result['page_number']} (Score: {result['similarity']:.4f})")
-        
-            # Apply threshold filtering
-            adaptive_filtered_results = self.adaptive_threshold(results, std_multiplier=self.valves.ADAPTIVE_THRESHOLD)
-            
-            # Extract images and metadata from all results using adaptive threshold
-            images = [result["image"] for result in adaptive_filtered_results]
+
+            images = [result["image"] for result in results]
 
             try:
                 answer = self.query_vlm_api(query, images, results)
