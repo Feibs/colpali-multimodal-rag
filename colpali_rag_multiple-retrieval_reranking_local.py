@@ -26,7 +26,6 @@ class Pipeline:
         VLM_API_KEY: str
         VLM_MODEL_ID: str
         QDRANT_URL: str
-        QDRANT_API_KEY: str
         COLLECTION_NAME: str
         VLM_SYS_PROMPT: str
         TOP_K: int
@@ -34,14 +33,13 @@ class Pipeline:
         ADAPTIVE_THRESHOLD: float
 
     def __init__(self):
-        self.name = "ColNomic + GPT Reranking Pipeline"
+        self.name = "[Local] ColNomic + GPT Reranking Pipeline"
         self.valves = self.Valves(
             COLPALI_API_ENDPOINT=os.getenv("COLPALI_API_ENDPOINT", "http://my-nomic-embedding-service"),
             VLM_API_ENDPOINT=os.getenv("VLM_API_ENDPOINT", "http://10.16.0.4:4000/v1"),
             VLM_API_KEY=os.getenv("VLM_API_KEY", ""),
             VLM_MODEL_ID=os.getenv("VLM_MODEL_ID", "gpt-4o"),
             QDRANT_URL=os.getenv("QDRANT_URL", "http://my-qdrant-url"),
-            QDRANT_API_KEY=os.getenv("QDRANT_API_KEY", ""),
             COLLECTION_NAME=os.getenv("QDRANT_COLLECTION", "my_collection"),
             VLM_SYS_PROMPT=os.getenv("VLM_SYS_PROMPT", "Anda adalah seorang analis dokumen ahli dengan pengalaman luas dalam analisis lintas dokumen dan sintesis informasi. Tugas Anda adalah:  1. FASE ANALISIS: - Analisis setiap gambar dokumen yang diberikan secara individual - Identifikasi informasi kunci, termasuk tanggal, angka, topik utama, dan detail penting - Catat setiap hubungan atau kontradiksi antar dokumen  2. FASE RINGKASAN: - Berikan ringkasan singkat untuk setiap dokumen - Buat ringkasan terpadu yang menyoroti tema umum dan kata kunci - Tunjukkan kualitas/kejelasan gambar dan setiap keterbatasan dalam membacanya  3. FASE JAWABAN PERTANYAAN: - Jawab pertanyaan spesifik dari pengguna berdasarkan bukti dari dokumen, perhatikan kata kunci antara pertanyaan pengguna dan dokumen - Kutip referensi spesifik menggunakan pengidentifikasi dokumen (misalnya, 'Dokumen A menyatakan...') - Soroti di mana beberapa dokumen menjawab pertanyaan pengguna - Tunjukkan dengan jelas jika ada informasi yang diperlukan yang hilang atau tidak jelas  Format jawaban Anda dengan: - Judul bagian yang jelas - Poin-poin untuk informasi kunci - Kutipan langsung ketika sangat relevan - Referensi silang antar dokumen  Jika Anda menemui keterbatasan dalam kualitas gambar atau kejelasan konten, harap nyatakan keterbatasan tersebut secara eksplisit dalam analisis Anda. Kembalikan respons dalam bahasa Indonesia."),
             TOP_K=int(os.getenv("TOP_K", "3")),
@@ -62,7 +60,7 @@ class Pipeline:
     def get_qdrant_client(self):
         """Get a connection to the Qdrant vector database"""
         if not self.client:
-            self.client = QdrantClient(url=self.valves.QDRANT_URL, api_key=self.valves.QDRANT_API_KEY)
+            self.client = QdrantClient(url=self.valves.QDRANT_URL, port=None)
         return self.client
 
     def initialize_data(self):
@@ -255,6 +253,7 @@ class Pipeline:
                         "id": str(result.id),
                         "title": result.payload["title"],
                         "file_path": result.payload["file_path"],
+                        "version": result.payload["version"],
                         "page_number": result.payload["page_number"],
                         "image": image,
                         "similarity": result.score,
@@ -393,7 +392,7 @@ class Pipeline:
                 answer = self.query_vlm_api(query, 
                                             images=[result["image"] for result in results], 
                                             pages=results, 
-                                            additional_query="\n\nEach page includes metadata such as its page number and an image of the page. The list is initially ordered by a similarity score, but I want you to independently evaluate the content of the provided pages (e.g., based on their text, layout, or visual cues) and re-rank them based on their relevance or importance. Ensure to use the physical page number, which is the value of 'page_number' field. If a page is irrelevant or unhelpful, feel free to exclude it from the result. \n\nReturn your output as a plain text in this format: {<page_number>: <final rank>} \n\nOnly return the plain text 'dictionary'. Do not include any explanation or extra text. If you think all the provided documents are not relevant to the query, return empty {}.")
+                                            additional_query="\n\nEach page includes metadata such as its page number, version, and image of the page. The list is initially ordered by a similarity score, but I want you to independently evaluate the content of the provided pages (e.g., based on their text, layout, or visual cues) and re-rank them based on their relevance or importance. Consider the version too, you should return the latest version, which is the higher version number. Ensure the reranking is based on the provided pages only, do not add other pages. If a page is irrelevant or unhelpful, feel free to exclude it from the result. \n\nReturn your output as a plain text in this format: {<page_number>: <final rank>} \n\nOnly return the plain text 'dictionary'. Do not include any explanation or extra text. If you think all the provided documents are not relevant to the query, return empty {}.")
                 
                 reranked_docs = ast.literal_eval(str(answer))
 

@@ -34,7 +34,7 @@ class Pipeline:
         ADAPTIVE_THRESHOLD: float
 
     def __init__(self):
-        self.name = "ColNomic + GPT Reranking Pipeline"
+        self.name = "ColNomic + AWS Reranking Pipeline"
         self.valves = self.Valves(
             COLPALI_API_ENDPOINT=os.getenv("COLPALI_API_ENDPOINT", "http://my-nomic-embedding-service"),
             VLM_API_ENDPOINT=os.getenv("VLM_API_ENDPOINT", "http://10.16.0.4:4000/v1"),
