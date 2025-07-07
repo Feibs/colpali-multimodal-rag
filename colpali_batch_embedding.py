@@ -161,6 +161,13 @@ def upsert_to_qdrant(client: QdrantClient, points: List[models.PointStruct]):
         print(f"Error during upsert: {e}")
         raise
 
+def get_version(title: str) -> str:
+    index = title.rfind('v')
+    version = 'v00'
+    if index != -1:
+        version = title[index:]
+    return version
+
 def process_pdf(pdf_info: Dict[str, str], client: QdrantClient) -> None:
     """
     Process a PDF file using ColPali, convert to images, generate multi-vector embeddings, 
@@ -232,6 +239,7 @@ def process_pdf(pdf_info: Dict[str, str], client: QdrantClient) -> None:
             payload={
                 "title": title,
                 "file_path": file_path,
+                "version": get_version(title),
                 "page_number": page_number,
                 "image_data": image_base64,
                 "created_at": int(time.time()),
