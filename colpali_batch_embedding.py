@@ -24,11 +24,9 @@ import stamina
 
 # Qdrant configuration
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
-# COLLECTION_NAME = "colpali_documents"
 COLLECTION_NAME = "colnomic_documents"
 
 # ColPali Embedding Service configuration
-# COLPALI_API_ENDPOINT = os.getenv("COLPALI_API_ENDPOINT", "http://localhost:8000")
 COLPALI_API_ENDPOINT = os.getenv("COLPALI_API_ENDPOINT", "http://localhost:8001")
 
 def setup_qdrant():
@@ -239,7 +237,7 @@ def process_pdf(pdf_info: Dict[str, str], client: QdrantClient) -> None:
             payload={
                 "title": title,
                 "file_path": file_path,
-                "version": get_version(title),
+                "doc_version": get_version(title),
                 "page_number": page_number,
                 "image_data": image_base64,
                 "created_at": int(time.time()),
