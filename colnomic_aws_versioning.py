@@ -426,8 +426,10 @@ You are an expert document analyst with extensive experience in cross-document a
                     page_context += f"Image {i+1}: Physical page {result['page_number']} from {result['title']} of version {result['doc_version']}\n"
 
                 print(f"📊 page_context is: {page_context}")
-                format_example = "{<Title>#<Image PHYSICAL page>#<Version>: <final rank>}"
+                format_example = "{'<Title>#<Image PHYSICAL page>#<Version>': <final rank>}"
                 empty_example = "{}"
+                # format_example = "{<Title>#<Image PHYSICAL page>#<Version>: <final rank>}"
+                # empty_example = "[]"
 
                 answer = self.query_vlm_api(query,
                                             images=[result["image"] for result in results], 
@@ -495,11 +497,16 @@ Only return the plain text 'dictionary'. Do not include any explanation or extra
 
                 for result in results:
                     key = f"{result['title']}#{result['page_number']}#{result['doc_version']}"
+                    print("current key:", key)
                     if key in reranked_docs:
                         new_rank = int(reranked_docs[key])
                         result['rank'] = new_rank
                         new_results[new_rank - 1] = result 
+                        print("key in reranked_docs!")
+                results = new_results
 
+                print(f"\n🦈 NEW RESULTS AFTER RERANKING: {new_results}\n")
+                
                 # Get the summary from the VLM API
                 print("🤖🤖 Generating the answer text using VLM")
 
