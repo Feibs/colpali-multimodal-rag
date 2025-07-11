@@ -426,10 +426,8 @@ You are an expert document analyst with extensive experience in cross-document a
                     page_context += f"Image {i+1}: Physical page {result['page_number']} from {result['title']} of version {result['doc_version']}\n"
 
                 print(f"📊 page_context is: {page_context}")
-                format_example = "{'<Title>#<Image PHYSICAL page>#<Version>': <final rank>}"
-                empty_example = "{}"
-                # format_example = "{<Title>#<Image PHYSICAL page>#<Version>: <final rank>}"
-                # empty_example = "[]"
+                format_example = "[3, 5, 1]"
+                empty_example = "[]"
 
                 answer = self.query_vlm_api(query,
                                             images=[result["image"] for result in results], 
@@ -449,11 +447,10 @@ Exclude the Image that are clearly unrelated to the question or provide no helpf
 Get answer from the latest version document by default
 
 Output:
-Use the PHYSICAL page numbers provided above in relation to each image, NOT the printed page numbers you see on the document images.
 Only output those Images that meet the Guidelines and Versioning Requirement.
-Return your output as a plain text in this format: {format_example}
-
-Only return the plain text 'dictionary'. Do not include any explanation or extra text. If no Image have any relevance to answering the question, return empty {empty_example}.
+Only return the plain text 'list' or 'array' of the image numbers, ordered from most to least relevant, based on your reranking. 
+For example, if Image 3 is most helpful, followed by Image 5, and Image 1 is also relevant, return: {format_example}.
+Do not include any explanation or extra text. If no Image have any relevance to answering the question, return empty {empty_example}.
 """)
 
 # Prioritize the Image that directly help answer the Question or provide key information related to it
@@ -472,15 +469,13 @@ Only return the plain text 'dictionary'. Do not include any explanation or extra
                     print(f"❌ VLM raw response: '{answer}'")
                     return "❌ VLM did not return a valid dictionary format for reranking. Please try again."
                 
-                # Ensure reranked_docs is a dictionary
-                if not isinstance(reranked_docs, dict):
-                    print(f"❌ VLM returned {type(reranked_docs)} instead of dict: {reranked_docs}")
-                    return "❌ VLM did not return a valid dictionary format for reranking. Please try again."
+                # Ensure reranked_docs is a list
+                if not isinstance(reranked_docs, list):
+                    print(f"❌ VLM returned {type(reranked_docs)} instead of list: {reranked_docs}")
+                    return "❌ VLM did not return a valid list format for reranking. Please try again."
                 
                 if (len(reranked_docs) == 0):
                     return "❌ No relevant documents found for your question."
-
-                new_results = [0] * len(reranked_docs)
 
                 # Format the response with detailed document information
                 doc_info = f"\n\n📋 **Source Information ({len(reranked_docs)} documents analyzed):**\n"
@@ -488,24 +483,11 @@ Only return the plain text 'dictionary'. Do not include any explanation or extra
                 # Get the answer from the VLM API with all images
                 print("🤖 Generating re-ranked answer using VLM")
 
-                # for result in results:
-                #     if isinstance(reranked_docs, dict) and result['page_number'] in reranked_docs:
-                #         new_rank = int(reranked_docs.get(result['page_number']))
-                #         result['rank'] = new_rank
-                #         new_results[new_rank-1] = result
-                # results = new_results
-
-                for result in results:
-                    key = f"{result['title']}#{result['page_number']}#{result['doc_version']}"
-                    print("current key:", key)
-                    if key in reranked_docs:
-                        new_rank = int(reranked_docs[key])
-                        result['rank'] = new_rank
-                        new_results[new_rank - 1] = result 
-                        print("key in reranked_docs!")
+                new_results = []
+                for image_idx in reranked_docs:
+                    result_idx = int(image_idx)-1
+                    new_results.append(results[result_idx])
                 results = new_results
-
-                print(f"\n🦈 NEW RESULTS AFTER RERANKING: {new_results}\n")
                 
                 # Get the summary from the VLM API
                 print("🤖🤖 Generating the answer text using VLM")
