@@ -511,10 +511,12 @@ Do not include any explanation or extra text. If no Image have any relevance to 
                 
                 # Add all document images for reference
                 yield f"📸 **Retrieved Document Pages:**\n\n"
+                rank = 1
                 for result in results:
                     b64_img = self.encode_image_webp_to_base64(result["image"])
-                    yield f"**{result['rank']}. {result['title']} - Page {result['page_number']}**\n"
+                    yield f"**{rank}. {result['title']} - Page {result['page_number']}**\n"
                     yield f"![Document Page {result['rank']}](data:image/webp;base64,{b64_img})\n\n"
+                    rank += 1
                 
                 yield "\n---\n*Powered by ColPali Multi-Vector RAG with Multiple Document Retrieval and Threshold Filtering*\n"
             
