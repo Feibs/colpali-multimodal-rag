@@ -349,7 +349,7 @@ You are an expert document analyst with extensive experience in cross-document a
             })
         
         # Add the text query with context about multiple documents
-        query_text = f"Question: {query} \n\n {additional_query}"
+        query_text = f"<question>{query}</question> \n\n {additional_query}"
 
         print(f"🍄 VLM Q is: {query_text}")
 
@@ -426,37 +426,65 @@ You are an expert document analyst with extensive experience in cross-document a
                     page_context += f"Image {i+1}: Physical page {result['page_number']} from {result['title']} of version {result['doc_version']}\n"
 
                 print(f"📊 page_context is: {page_context}")
-                format_example = "[3, 5, 1]"
+                format_example = "[4, 1]"
                 empty_example = "[]"
 
                 answer = self.query_vlm_api(query,
                                             images=[result["image"] for result in results], 
                                             additional_query=f"""
+You are a helpful AI assistant specialized in analyzing and reranking document image pages based on their relevance to a given question.
+
+Your task is to evaluate the **content of image pages** (which include scanned text, tables, or charts) and **rerank them** according to how useful they are in answering a given question. You must follow strict relevance and versioning rules.
+
+Maintain a neutral, analytical tone.
+
+<context>
+You will be provided with:
+- A natural language question.
+- A list of image pages from one or more versions of a document (e.g., v00, v01), each tagged by its physical page number and version.
+
+Pages provided for reranking:
 {page_context}
-The list is initially ordered by a similarity score,
-but I want you to evaluate the content of each image, based on their text, tables, or charts,
-and only retain the Image if they are relevance to answering the given Question.
+</context>
 
-Versioning Requirement:
-If multiple images contain similar or overlapping content but represent different versions of a page (e.g., v00, v01), retain only the latest version, where the higher version number (e.g., v01) indicates a newer version.
-Only keep an older version if it contains unique, relevant content not present in the newer version.
+<rules>
+Important constraints:
 
-Guidelines:
-Retain the Image that directly help answer the Question.
-Exclude the Image that are clearly unrelated to the question or provide no helpful information to the Question.
-Get answer from the latest version document by default
+**Relevance Filtering:**
+- Only retain image pages that directly help answer the question.
+- Exclude any image that is unrelated to the question or that provides no helpful information.
 
-Output:
-Only output those Images that meet the Guidelines and Versioning Requirement.
-Only return the plain text 'list' or 'array' of the image numbers, ordered from most to least relevant, based on your reranking. 
-For example, if Image 3 is most helpful, followed by Image 5, and Image 1 is also relevant, return: {format_example}.
-Do not include any explanation or extra text. If no Image have any relevance to answering the question, return empty {empty_example}.
+**Versioning Requirement:**
+- If multiple images contain overlapping or duplicate content across different versions (e.g., v00 vs v01), retain only the latest version (e.g., v01).
+- Do **not** include older versions if a newer version contains the same or better information.
+- If Image 1 and Image 2 have the same physical page but different versions, and Image 1 has the higher version number, **exclude Image B unless its content is entirely different**.
+- Include an older version only if its content is clearly relevant and **not present** in any newer version.
+- Prefer the most up-to-date source of truth when available.
+- Do not include unrelated pages.
+- Use only the visible text, tables, or diagrams from each image to make decisions.
+- Do not hallucinate or assume content not shown.
+</rules>
+
+<example>
+Question: What is the guidelines to do inspection?
+
+Pages provided for reranking:
+Image 1: Physical page 127 from SOP v01 of version v01  
+Image 2: Physical page 127 from SOP v00 of version v00  
+Image 3: Physical page 126 from SOP v00 of version v00  
+Image 4: Physical page 126 from SOP v01 of version v01
+
+Your output if Image 4 and 1 are relevant and supersede v00 versions: {format_example}
+Or, your output if no image page is relevant to answer user's question: {empty_example}
+</example>
+
+Think step by step before you answer. Evaluate each image in isolation, then apply the versioning filter and relevance rules.
+
+<response>
+**Only output the final list of image numbers, in array format (e.g., {format_example}). Do not include any explanation or extra text. If none are relevant, return {empty_example}.**
+</response>
 """)
 
-# Prioritize the Image that directly help answer the Question or provide key information related to it
-# Consider the Image with partial answers, supporting context, or background information as potentially useful
-# Include the Image that contain relevant data, examples, or explanations even if they don't fully answer the question
-# Only exclude the Image that are clearly unrelated to the question topic or provide no helpful information
 
                 print(f"🔍 VLM Reranking Response: {repr(answer)}")
                 
@@ -467,7 +495,7 @@ Do not include any explanation or extra text. If no Image have any relevance to 
                 except (ValueError, SyntaxError) as parse_error:
                     print(f"❌ Failed to parse VLM response: {parse_error} | type: {type(answer)}")
                     print(f"❌ VLM raw response: '{answer}'")
-                    return "❌ VLM did not return a valid dictionary format for reranking. Please try again."
+                    return "❌ VLM did not return a valid list format for reranking. Please try again."
                 
                 # Ensure reranked_docs is a list
                 if not isinstance(reranked_docs, list):
